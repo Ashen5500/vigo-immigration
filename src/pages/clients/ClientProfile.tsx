@@ -130,7 +130,7 @@ export default function ClientProfile() {
     if (!id || !client) return;
     setSaving(true);
 
-    const { experiences, port_of_entry, ...otherWorkFields } = editWork;
+    const { id: _id, client_id: _cid, created_at: _cat, updated_at: _uat, experiences, port_of_entry, ...otherWorkFields } = editWork;
     const serializedPortOfEntry = JSON.stringify({
       port_of_entry: port_of_entry || '',
       experiences: experiences || []
