@@ -1,8 +1,8 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { Client, PersonalDetails, PassportDetails, CompanyDetails, WorkDetails, Remark } from '../../lib/types';
-import { formatDate } from '../../lib/utils';
+import { formatDate, calculateAge } from '../../lib/utils';
 
 export default function ClientPrint() {
   const { id } = useParams<{ id: string }>();
@@ -98,6 +98,7 @@ export default function ClientPrint() {
       <Section title="Personal Details">
         <Field label="Full Name" value={name} />
         <Field label="Date of Birth" value={formatDate(pd?.date_of_birth)} />
+        <Field label="Age" value={calculateAge(pd?.date_of_birth)} />
         <Field label="Gender" value={pd?.gender} />
         <Field label="Nationality" value={pd?.nationality} />
         <Field label="Email" value={pd?.email} />
@@ -121,15 +122,39 @@ export default function ClientPrint() {
         <Field label="Employer Address" value={company?.employer_address} />
       </Section>
 
-      <Section title="Work / Immigration Details">
-        <Field label="Work Permit No." value={work?.work_permit_no} />
-        <Field label="Permit Expiry" value={formatDate(work?.work_permit_expiry)} />
-        <Field label="Visa Type" value={work?.visa_type} />
-        <Field label="Visa Number" value={work?.visa_number} />
-        <Field label="Visa Expiry" value={formatDate(work?.visa_expiry)} />
-        <Field label="Occupation" value={work?.occupation} />
-        <Field label="Port of Entry" value={work?.port_of_entry} />
-      </Section>
+      <div className="mb-6">
+        <h3 className="text-sm font-bold text-white bg-gray-800 px-3 py-1.5 mb-3 rounded">Work Experience</h3>
+        
+        {/* Render work experience list first if any */}
+        {work?.experiences && work.experiences.length > 0 ? (
+          <div className="mb-4 bg-gray-50 border border-gray-200 rounded-lg p-3">
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-2">Previous Employment</span>
+            <div className="space-y-2">
+              {work.experiences.map((exp: any, index: number) => (
+                <div key={exp.id || index} className="text-sm flex justify-between border-b border-gray-200 pb-1 last:border-0 last:pb-0">
+                  <div>
+                    <span className="font-semibold text-gray-800">{exp.position}</span>
+                    <span className="text-gray-500 text-xs ml-2">at {exp.company}</span>
+                  </div>
+                  <span className="text-gray-600 text-xs font-medium">{exp.duration}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="mb-4 text-sm text-gray-400 italic">No work experience entries recorded.</div>
+        )}
+
+        <div className="grid grid-cols-3 gap-x-6 gap-y-0">
+          <Field label="Work Permit No." value={work?.work_permit_no} />
+          <Field label="Permit Expiry" value={formatDate(work?.work_permit_expiry)} />
+          <Field label="Visa Type" value={work?.visa_type} />
+          <Field label="Visa Number" value={work?.visa_number} />
+          <Field label="Visa Expiry" value={formatDate(work?.visa_expiry)} />
+          <Field label="Occupation" value={work?.occupation} />
+          <Field label="Port of Entry" value={work?.port_of_entry} />
+        </div>
+      </div>
 
       {/* Remarks */}
       {remarks.length > 0 && (

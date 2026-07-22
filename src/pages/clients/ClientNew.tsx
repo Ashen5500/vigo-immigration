@@ -1,12 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
-import { useAuth } from '../../context/AuthContext';
-import { Category, StaffProfile } from '../../lib/types';
-import { CLIENT_STATUSES } from '../../lib/utils';
-import { ChevronLeft, ChevronRight, Save, Calendar } from 'lucide-react';
+import { Category, StaffProfile, WorkExperience } from '../../lib/types';
+import { CLIENT_STATUSES, calculateAge } from '../../lib/utils';
+import { ChevronLeft, ChevronRight, Save, Calendar, Plus, Trash2 } from 'lucide-react';
 
-const STEPS = ['Personal', 'Passport', 'Company', 'Work', 'Case'];
+const STEPS = ['Personal', 'Passport', 'Company', 'Work Experience', 'Case'];
 
 interface FormData {
   // personal
@@ -41,6 +40,7 @@ interface FormData {
   visa_expiry: string;
   occupation: string;
   port_of_entry: string;
+  experiences: WorkExperience[];
   // case
   status: string;
   category_id: string;
@@ -55,6 +55,7 @@ const INIT: FormData = {
   passport_number: '', issue_date: '', expiry_date: '', issuing_country: '', place_of_birth: '',
   company_name: '', company_reg_no: '', position: '', employer_address: '',
   work_permit_no: '', work_permit_expiry: '', visa_type: '', visa_number: '', visa_expiry: '', occupation: '', port_of_entry: '',
+  experiences: [],
   status: 'New', category_id: '', assigned_to: '', case_date: new Date().toISOString().split('T')[0], cv_needed: false,
 };
 
@@ -79,19 +80,8 @@ function parseTypedDate(input: string): string {
   return `${y}-${month}-${day}`;
 }
 
-function calculateAge(iso: string): string {
-  if (!iso) return '';
-  const dob = new Date(iso);
-  if (isNaN(dob.getTime())) return '';
-  const today = new Date();
-  let age = today.getFullYear() - dob.getFullYear();
-  const monthDiff = today.getMonth() - dob.getMonth();
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) age--;
-  return age >= 0 ? String(age) : '';
-}
 
 export default function ClientNew() {
-  const { user } = useAuth();
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<FormData>(INIT);
@@ -103,6 +93,35 @@ export default function ClientNew() {
   // typed display value for DOB + ref to hidden native date picker
   const [dobDisplay, setDobDisplay] = useState('');
   const dobPickerRef = useRef<HTMLInputElement>(null);
+
+  // work experience state
+  const [newExpCompany, setNewExpCompany] = useState('');
+  const [newExpPosition, setNewExpPosition] = useState('');
+  const [newExpDuration, setNewExpDuration] = useState('');
+
+  function addExperience() {
+    if (!newExpCompany.trim() || !newExpPosition.trim() || !newExpDuration.trim()) return;
+    const newExp: WorkExperience = {
+      id: Math.random().toString(36).substring(2, 9),
+      company: newExpCompany.trim(),
+      position: newExpPosition.trim(),
+      duration: newExpDuration.trim()
+    };
+    setForm(prev => ({
+      ...prev,
+      experiences: [...(prev.experiences || []), newExp]
+    }));
+    setNewExpCompany('');
+    setNewExpPosition('');
+    setNewExpDuration('');
+  }
+
+  function removeExperience(id: string) {
+    setForm(prev => ({
+      ...prev,
+      experiences: (prev.experiences || []).filter(exp => exp.id !== id)
+    }));
+  }
 
   useEffect(() => {
     supabase.from('categories').select('*').order('name').then(r => setCategories(r.data ?? []));
@@ -194,6 +213,7 @@ export default function ClientNew() {
         visa_expiry: form.visa_expiry || null,
         occupation: form.occupation || null,
         port_of_entry: form.port_of_entry || null,
+        experiences: form.experiences || [],
       }),
     ]);
 
@@ -350,21 +370,103 @@ export default function ClientNew() {
 
         {/* Step 3: Work */}
         {step === 3 && (
-          <div className="space-y-4">
-            <h2 className="font-semibold text-slate-800 text-base mb-4">Work / Immigration Details</h2>
-            <div className="grid grid-cols-2 gap-4">
-              <div><label className={labelClass}>Work Permit No.</label><input className={inputClass} value={form.work_permit_no} onChange={e => set('work_permit_no', e.target.value)} /></div>
-              <div><label className={labelClass}>Permit Expiry</label><input type="date" className={inputClass} value={form.work_permit_expiry} onChange={e => set('work_permit_expiry', e.target.value)} /></div>
+          <div className="space-y-6">
+            <div>
+              <h2 className="font-semibold text-slate-800 text-base mb-1">Work Experience</h2>
+              <p className="text-xs text-slate-400">Add details of previous employment / work history.</p>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div><label className={labelClass}>Visa Type</label><input className={inputClass} value={form.visa_type} onChange={e => set('visa_type', e.target.value)} placeholder="e.g. Stamp 4" /></div>
-              <div><label className={labelClass}>Visa Number</label><input className={inputClass} value={form.visa_number} onChange={e => set('visa_number', e.target.value)} /></div>
+
+            {/* List of current experiences */}
+            <div className="space-y-2">
+              {form.experiences && form.experiences.length > 0 ? (
+                form.experiences.map((exp) => (
+                  <div key={exp.id} className="flex items-center justify-between p-3.5 bg-slate-50 border border-slate-200 rounded-xl">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-slate-800 truncate">{exp.position}</p>
+                      <p className="text-xs text-slate-500 truncate">{exp.company} &middot; {exp.duration}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeExperience(exp.id)}
+                      className="text-slate-400 hover:text-red-500 p-1.5 transition-colors"
+                      title="Remove experience"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-6 border border-dashed border-slate-200 rounded-xl text-xs text-slate-400">
+                  No work experience added yet. Add one below.
+                </div>
+              )}
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div><label className={labelClass}>Visa Expiry</label><input type="date" className={inputClass} value={form.visa_expiry} onChange={e => set('visa_expiry', e.target.value)} /></div>
-              <div><label className={labelClass}>Occupation</label><input className={inputClass} value={form.occupation} onChange={e => set('occupation', e.target.value)} /></div>
+
+            {/* Add Experience form */}
+            <div className="bg-slate-50/50 p-4 border border-slate-200 rounded-xl space-y-4">
+              <p className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Add Experience Entry</p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Company Name</label>
+                  <input
+                    type="text"
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-700 bg-white"
+                    placeholder="e.g. Acme Corp"
+                    value={newExpCompany}
+                    onChange={e => setNewExpCompany(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Position / Job Title</label>
+                  <input
+                    type="text"
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-700 bg-white"
+                    placeholder="e.g. Software Engineer"
+                    value={newExpPosition}
+                    onChange={e => setNewExpPosition(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Duration</label>
+                  <input
+                    type="text"
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-700 bg-white"
+                    placeholder="e.g. 2 years / Jan 2020 - Dec 2022"
+                    value={newExpDuration}
+                    onChange={e => setNewExpDuration(e.target.value)}
+                  />
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={addExperience}
+                disabled={!newExpCompany.trim() || !newExpPosition.trim() || !newExpDuration.trim()}
+                className="w-full flex items-center justify-center gap-1.5 bg-blue-50 hover:bg-blue-100 disabled:opacity-50 text-blue-600 text-xs font-semibold py-2 px-3 rounded-lg transition-colors border border-blue-100"
+              >
+                <Plus className="w-3.5 h-3.5" /> Add to List
+              </button>
             </div>
-            <div><label className={labelClass}>Port of Entry</label><input className={inputClass} value={form.port_of_entry} onChange={e => set('port_of_entry', e.target.value)} /></div>
+
+            {/* Visa / Permit Details */}
+            <div className="pt-4 border-t border-slate-100">
+              <h3 className="font-semibold text-slate-700 text-sm mb-4">Visa &amp; Permit Details</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div><label className={labelClass}>Work Permit No.</label><input className={inputClass} value={form.work_permit_no} onChange={e => set('work_permit_no', e.target.value)} /></div>
+                <div><label className={labelClass}>Permit Expiry</label><input type="date" className={inputClass} value={form.work_permit_expiry} onChange={e => set('work_permit_expiry', e.target.value)} /></div>
+              </div>
+              <div className="grid grid-cols-2 gap-4 mt-4">
+                <div><label className={labelClass}>Visa Type</label><input className={inputClass} value={form.visa_type} onChange={e => set('visa_type', e.target.value)} placeholder="e.g. Stamp 4" /></div>
+                <div><label className={labelClass}>Visa Number</label><input className={inputClass} value={form.visa_number} onChange={e => set('visa_number', e.target.value)} /></div>
+              </div>
+              <div className="grid grid-cols-2 gap-4 mt-4">
+                <div><label className={labelClass}>Visa Expiry</label><input type="date" className={inputClass} value={form.visa_expiry} onChange={e => set('visa_expiry', e.target.value)} /></div>
+                <div><label className={labelClass}>Occupation</label><input className={inputClass} value={form.occupation} onChange={e => set('occupation', e.target.value)} /></div>
+              </div>
+              <div className="mt-4">
+                <label className={labelClass}>Port of Entry</label>
+                <input className={inputClass} value={form.port_of_entry} onChange={e => set('port_of_entry', e.target.value)} />
+              </div>
+            </div>
           </div>
         )}
 

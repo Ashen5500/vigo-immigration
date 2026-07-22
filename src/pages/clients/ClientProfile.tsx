@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { Client, PersonalDetails, PassportDetails, CompanyDetails, WorkDetails, Remark, Document, Category, StaffProfile } from '../../lib/types';
-import { STATUS_COLORS, CLIENT_STATUSES, formatDate, DOCUMENT_TYPES } from '../../lib/utils';
+import { STATUS_COLORS, CLIENT_STATUSES, formatDate, calculateAge } from '../../lib/utils';
 import {
   ChevronLeft, Edit2, Save, X, Printer, Plus, Trash2,
   User, FileText, Building, Briefcase, MessageSquare, Upload, File
@@ -13,7 +13,7 @@ type Tab = 'personal' | 'passport' | 'company' | 'work' | 'remarks' | 'documents
 
 export default function ClientProfile() {
   const { id } = useParams<{ id: string }>();
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [tab, setTab] = useState<Tab>('personal');
   const [client, setClient] = useState<Client | null>(null);
@@ -38,6 +38,35 @@ export default function ClientProfile() {
   const [editCompany, setEditCompany] = useState<Partial<CompanyDetails>>({});
   const [editWork, setEditWork] = useState<Partial<WorkDetails>>({});
   const [editClient, setEditClient] = useState<Partial<Client>>({});
+
+  // Work experience helper states for edit mode
+  const [newExpCompany, setNewExpCompany] = useState('');
+  const [newExpPosition, setNewExpPosition] = useState('');
+  const [newExpDuration, setNewExpDuration] = useState('');
+
+  function addEditExperience() {
+    if (!newExpCompany.trim() || !newExpPosition.trim() || !newExpDuration.trim()) return;
+    const newExp = {
+      id: Math.random().toString(36).substring(2, 9),
+      company: newExpCompany.trim(),
+      position: newExpPosition.trim(),
+      duration: newExpDuration.trim()
+    };
+    setEditWork(prev => ({
+      ...prev,
+      experiences: [...(prev.experiences || []), newExp]
+    }));
+    setNewExpCompany('');
+    setNewExpPosition('');
+    setNewExpDuration('');
+  }
+
+  function removeEditExperience(id: string) {
+    setEditWork(prev => ({
+      ...prev,
+      experiences: (prev.experiences || []).filter(e => e.id !== id)
+    }));
+  }
 
   useEffect(() => {
     if (!id) return;
@@ -165,7 +194,7 @@ export default function ClientProfile() {
     { key: 'personal', label: 'Personal', icon: User },
     { key: 'passport', label: 'Passport', icon: FileText },
     { key: 'company', label: 'Company', icon: Building },
-    { key: 'work', label: 'Work / Immigration', icon: Briefcase },
+    { key: 'work', label: 'Work Experience', icon: Briefcase },
     { key: 'remarks', label: `Remarks (${remarks.length})`, icon: MessageSquare },
     { key: 'documents', label: `Documents (${documents.length})`, icon: Upload },
   ];
@@ -301,6 +330,7 @@ export default function ClientProfile() {
               { label: 'First Name', field: 'first_name', src: pd?.first_name },
               { label: 'Last Name', field: 'last_name', src: pd?.last_name },
               { label: 'Date of Birth', field: 'date_of_birth', src: formatDate(pd?.date_of_birth), type: 'date' },
+              { label: 'Age', field: 'age', src: calculateAge(pd?.date_of_birth), type: 'readonly' },
               { label: 'Gender', field: 'gender', src: pd?.gender, type: 'select', options: ['Male', 'Female', 'Other'] },
               { label: 'Nationality', field: 'nationality', src: pd?.nationality },
               { label: 'Email', field: 'email', src: pd?.email, type: 'email' },
@@ -319,6 +349,8 @@ export default function ClientProfile() {
                       <option value="">—</option>
                       {options?.map(o => <option key={o} value={o}>{o}</option>)}
                     </select>
+                  ) : type === 'readonly' ? (
+                    <input type="text" className={inp + ' bg-slate-50 text-slate-500'} value={calculateAge(editPd.date_of_birth)} readOnly placeholder="Auto-calculated" />
                   ) : (
                     <input type={type ?? 'text'} className={inp} value={(editPd as any)[field] ?? ''} onChange={e => setEditPd(p => ({ ...p, [field]: e.target.value }))} />
                   )
@@ -336,10 +368,10 @@ export default function ClientProfile() {
             {[
               { label: 'Passport Number', field: 'passport_number', src: passport?.passport_number },
               { label: 'Place of Birth', field: 'place_of_birth', src: passport?.place_of_birth },
-              { label: 'Issue Date', field: 'issue_date', src: formatDate(passport?.issue_date), type: 'date', raw: passport?.issue_date },
-              { label: 'Expiry Date', field: 'expiry_date', src: formatDate(passport?.expiry_date), type: 'date', raw: passport?.expiry_date },
+              { label: 'Issue Date', field: 'issue_date', src: formatDate(passport?.issue_date), type: 'date' },
+              { label: 'Expiry Date', field: 'expiry_date', src: formatDate(passport?.expiry_date), type: 'date' },
               { label: 'Issuing Country', field: 'issuing_country', src: passport?.issuing_country },
-            ].map(({ label, field, src, type, raw }) => (
+            ].map(({ label, field, src, type }) => (
               <div key={field}>
                 <p className={lbl}>{label}</p>
                 {editing ? (
@@ -379,25 +411,139 @@ export default function ClientProfile() {
 
         {/* Work */}
         {tab === 'work' && (
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-5">
-            {[
-              { label: 'Work Permit No.', field: 'work_permit_no', src: work?.work_permit_no },
-              { label: 'Permit Expiry', field: 'work_permit_expiry', src: formatDate(work?.work_permit_expiry), type: 'date' },
-              { label: 'Visa Type', field: 'visa_type', src: work?.visa_type },
-              { label: 'Visa Number', field: 'visa_number', src: work?.visa_number },
-              { label: 'Visa Expiry', field: 'visa_expiry', src: formatDate(work?.visa_expiry), type: 'date' },
-              { label: 'Occupation', field: 'occupation', src: work?.occupation },
-              { label: 'Port of Entry', field: 'port_of_entry', src: work?.port_of_entry },
-            ].map(({ label, field, src, type }) => (
-              <div key={field}>
-                <p className={lbl}>{label}</p>
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-800 uppercase tracking-wider mb-3">Work Experience</h3>
+              
+              {/* List Section */}
+              <div className="space-y-2 mb-4">
                 {editing ? (
-                  <input type={type ?? 'text'} className={inp} value={(editWork as any)[field] ?? ''} onChange={e => setEditWork(p => ({ ...p, [field]: e.target.value }))} />
+                  // Edit mode experiences
+                  <>
+                    {editWork.experiences && editWork.experiences.length > 0 ? (
+                      <div className="space-y-2">
+                        {editWork.experiences.map((exp: any) => (
+                          <div key={exp.id} className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-semibold text-slate-800 truncate">{exp.position}</p>
+                              <p className="text-xs text-slate-500 truncate">{exp.company} &middot; {exp.duration}</p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => removeEditExperience(exp.id)}
+                              className="text-slate-400 hover:text-red-500 p-1.5 transition-colors"
+                              title="Remove experience"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-4 border border-dashed border-slate-200 rounded-xl text-xs text-slate-400">
+                        No work experience added yet. Add one below.
+                      </div>
+                    )}
+
+                    {/* Add Experience in Edit Mode */}
+                    <div className="bg-slate-50/50 p-4 border border-slate-200 rounded-xl space-y-3 mt-3">
+                      <p className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Add Experience Entry</p>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-xs font-medium text-slate-500 mb-1">Company Name</label>
+                          <input
+                            type="text"
+                            className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-700 bg-white"
+                            placeholder="e.g. Acme Corp"
+                            value={newExpCompany}
+                            onChange={e => setNewExpCompany(e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-500 mb-1">Position / Job Title</label>
+                          <input
+                            type="text"
+                            className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-700 bg-white"
+                            placeholder="e.g. Software Engineer"
+                            value={newExpPosition}
+                            onChange={e => setNewExpPosition(e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-500 mb-1">Duration</label>
+                          <input
+                            type="text"
+                            className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-700 bg-white"
+                            placeholder="e.g. 2 years / Jan 2020 - Dec 2022"
+                            value={newExpDuration}
+                            onChange={e => setNewExpDuration(e.target.value)}
+                          />
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={addEditExperience}
+                        disabled={!newExpCompany.trim() || !newExpPosition.trim() || !newExpDuration.trim()}
+                        className="w-full flex items-center justify-center gap-1.5 bg-blue-50 hover:bg-blue-100 disabled:opacity-50 text-blue-600 text-xs font-semibold py-1.5 px-3 rounded-lg transition-colors border border-blue-100"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> Add Experience
+                      </button>
+                    </div>
+                  </>
                 ) : (
-                  <p className="text-sm font-medium text-slate-800">{src || '—'}</p>
+                  // View mode experiences
+                  <>
+                    {work?.experiences && work.experiences.length > 0 ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {work.experiences.map((exp: any) => (
+                          <div key={exp.id} className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl flex items-start gap-3">
+                            <div className="bg-blue-50 text-blue-600 p-2 rounded-lg">
+                              <Briefcase className="w-4 h-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-slate-800">{exp.position}</p>
+                              <p className="text-xs text-slate-500">{exp.company}</p>
+                              <span className="inline-block mt-1 text-[10px] font-medium bg-slate-200/60 text-slate-600 px-1.5 py-0.5 rounded">
+                                {exp.duration}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-slate-400 text-sm text-center py-6 border border-dashed border-slate-200 rounded-xl">
+                        No work experience recorded.
+                      </p>
+                    )}
+                  </>
                 )}
               </div>
-            ))}
+            </div>
+
+            {/* Visa / Permit Details */}
+            <div className="pt-4 border-t border-slate-100">
+              <h3 className="text-sm font-semibold text-slate-800 uppercase tracking-wider mb-4">Visa &amp; Permit Details</h3>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-5">
+                {[
+                  { label: 'Work Permit No.', field: 'work_permit_no', src: work?.work_permit_no },
+                  { label: 'Permit Expiry', field: 'work_permit_expiry', src: formatDate(work?.work_permit_expiry), type: 'date' },
+                  { label: 'Visa Type', field: 'visa_type', src: work?.visa_type },
+                  { label: 'Visa Number', field: 'visa_number', src: work?.visa_number },
+                  { label: 'Visa Expiry', field: 'visa_expiry', src: formatDate(work?.visa_expiry), type: 'date' },
+                  { label: 'Occupation', field: 'occupation', src: work?.occupation },
+                  { label: 'Port of Entry', field: 'port_of_entry', src: work?.port_of_entry },
+                ].map(({ label, field, src, type }) => (
+                  <div key={field}>
+                    <p className={lbl}>{label}</p>
+                    {editing ? (
+                      <input type={type ?? 'text'} className={inp} value={(editWork as any)[field] ?? ''} onChange={e => setEditWork(p => ({ ...p, [field]: e.target.value }))} />
+                    ) : (
+                      <p className="text-sm font-medium text-slate-800">{src || '—'}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         )}
 

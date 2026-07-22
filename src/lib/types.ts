@@ -75,6 +75,13 @@ export interface CompanyDetails {
   updated_at: string;
 }
 
+export interface WorkExperience {
+  id: string;
+  company: string;
+  position: string;
+  duration: string;
+}
+
 export interface WorkDetails {
   id: string;
   client_id: string;
@@ -85,6 +92,7 @@ export interface WorkDetails {
   visa_expiry?: string;
   occupation?: string;
   port_of_entry?: string;
+  experiences?: WorkExperience[];
   created_at: string;
   updated_at: string;
 }

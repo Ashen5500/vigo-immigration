@@ -45,3 +45,14 @@ export function daysUntil(date?: string | null): number | null {
   const diff = new Date(date).getTime() - Date.now();
   return Math.ceil(diff / (1000 * 60 * 60 * 24));
 }
+
+export function calculateAge(iso?: string | null): string {
+  if (!iso) return '';
+  const dob = new Date(iso);
+  if (isNaN(dob.getTime())) return '';
+  const today = new Date();
+  let age = today.getFullYear() - dob.getFullYear();
+  const monthDiff = today.getMonth() - dob.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) age--;
+  return age >= 0 ? String(age) : '';
+}
