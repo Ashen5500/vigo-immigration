@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { Category, StaffProfile } from '../../lib/types';
 import { CLIENT_STATUSES } from '../../lib/utils';
-import { ChevronLeft, ChevronRight, Save, User, Passport, Building, Briefcase, CheckCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Save, Calendar } from 'lucide-react';
 
 const STEPS = ['Personal', 'Passport', 'Company', 'Work', 'Case'];
 
@@ -58,6 +58,38 @@ const INIT: FormData = {
   status: 'New', category_id: '', assigned_to: '', case_date: new Date().toISOString().split('T')[0], cv_needed: false,
 };
 
+// ---- date helpers ----
+
+function formatDateForDisplay(iso: string): string {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-');
+  if (!y || !m || !d) return '';
+  return `${d}/${m}/${y}`;
+}
+
+function parseTypedDate(input: string): string {
+  // Accepts DD/MM/YYYY or DD-MM-YYYY
+  const match = input.trim().match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (!match) return '';
+  const [, d, m, y] = match;
+  const day = d.padStart(2, '0');
+  const month = m.padStart(2, '0');
+  const test = new Date(`${y}-${month}-${day}`);
+  if (isNaN(test.getTime())) return '';
+  return `${y}-${month}-${day}`;
+}
+
+function calculateAge(iso: string): string {
+  if (!iso) return '';
+  const dob = new Date(iso);
+  if (isNaN(dob.getTime())) return '';
+  const today = new Date();
+  let age = today.getFullYear() - dob.getFullYear();
+  const monthDiff = today.getMonth() - dob.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) age--;
+  return age >= 0 ? String(age) : '';
+}
+
 export default function ClientNew() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -68,13 +100,31 @@ export default function ClientNew() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  // typed display value for DOB + ref to hidden native date picker
+  const [dobDisplay, setDobDisplay] = useState('');
+  const dobPickerRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     supabase.from('categories').select('*').order('name').then(r => setCategories(r.data ?? []));
     supabase.from('staff_profiles').select('*').order('full_name').then(r => setStaff(r.data ?? []));
   }, []);
 
+  useEffect(() => {
+    setDobDisplay(formatDateForDisplay(form.date_of_birth));
+  }, [form.date_of_birth]);
+
   function set(field: keyof FormData, value: string | boolean) {
     setForm(prev => ({ ...prev, [field]: value }));
+  }
+
+  function handleDobTextChange(value: string) {
+    setDobDisplay(value);
+    if (value.trim() === '') {
+      set('date_of_birth', '');
+      return;
+    }
+    const iso = parseTypedDate(value);
+    if (iso) set('date_of_birth', iso);
   }
 
   async function handleSave() {
@@ -199,8 +249,49 @@ export default function ClientNew() {
               <div><label className={labelClass}>First Name *</label><input className={inputClass} value={form.first_name} onChange={e => set('first_name', e.target.value)} placeholder="Jane" /></div>
               <div><label className={labelClass}>Last Name *</label><input className={inputClass} value={form.last_name} onChange={e => set('last_name', e.target.value)} placeholder="Smith" /></div>
             </div>
+
             <div className="grid grid-cols-2 gap-4">
-              <div><label className={labelClass}>Date of Birth</label><input type="date" className={inputClass} value={form.date_of_birth} onChange={e => set('date_of_birth', e.target.value)} /></div>
+              <div>
+                <label className={labelClass}>Date of Birth</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    className={inputClass + ' pr-9'}
+                    placeholder="DD/MM/YYYY"
+                    value={dobDisplay}
+                    onChange={e => handleDobTextChange(e.target.value)}
+                    onBlur={() => setDobDisplay(formatDateForDisplay(form.date_of_birth))}
+                  />
+                  <input
+                    ref={dobPickerRef}
+                    type="date"
+                    tabIndex={-1}
+                    className="absolute opacity-0 w-0 h-0 pointer-events-none"
+                    value={form.date_of_birth}
+                    onChange={e => set('date_of_birth', e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => dobPickerRef.current?.showPicker?.()}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  >
+                    <Calendar className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label className={labelClass}>Age</label>
+                <input
+                  type="text"
+                  className={inputClass + ' bg-slate-50 text-slate-500'}
+                  value={calculateAge(form.date_of_birth)}
+                  readOnly
+                  placeholder="Auto-calculated"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className={labelClass}>Gender</label>
                 <select className={inputClass} value={form.gender} onChange={e => set('gender', e.target.value)}>
@@ -208,15 +299,17 @@ export default function ClientNew() {
                   <option>Male</option><option>Female</option><option>Other</option>
                 </select>
               </div>
+              <div>
+                <label className={labelClass}>Nationality</label>
+                <input className={inputClass} value={form.nationality} onChange={e => set('nationality', e.target.value)} placeholder="Irish" />
+              </div>
             </div>
+
             <div className="grid grid-cols-2 gap-4">
-              <div><label className={labelClass}>Nationality</label><input className={inputClass} value={form.nationality} onChange={e => set('nationality', e.target.value)} placeholder="Irish" /></div>
               <div><label className={labelClass}>Email</label><input type="email" className={inputClass} value={form.email} onChange={e => set('email', e.target.value)} placeholder="jane@example.com" /></div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
               <div><label className={labelClass}>Phone</label><input className={inputClass} value={form.phone} onChange={e => set('phone', e.target.value)} placeholder="+353..." /></div>
-              <div><label className={labelClass}>WhatsApp</label><input className={inputClass} value={form.whatsapp} onChange={e => set('whatsapp', e.target.value)} placeholder="+353..." /></div>
             </div>
+            <div><label className={labelClass}>WhatsApp</label><input className={inputClass} value={form.whatsapp} onChange={e => set('whatsapp', e.target.value)} placeholder="+353..." /></div>
             <div><label className={labelClass}>Address Line 1</label><input className={inputClass} value={form.address_line1} onChange={e => set('address_line1', e.target.value)} /></div>
             <div><label className={labelClass}>Address Line 2</label><input className={inputClass} value={form.address_line2} onChange={e => set('address_line2', e.target.value)} /></div>
             <div className="grid grid-cols-2 gap-4">
