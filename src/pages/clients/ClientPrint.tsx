@@ -12,6 +12,7 @@ export default function ClientPrint() {
   const [company, setCompany] = useState<CompanyDetails | null>(null);
   const [work, setWork] = useState<WorkDetails | null>(null);
   const [remarks, setRemarks] = useState<Remark[]>([]);
+  const [staff, setStaff] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -19,13 +20,14 @@ export default function ClientPrint() {
     if (!id) return;
     async function load() {
       try {
-        const [c, p, pass, comp, wrk, rem] = await Promise.all([
+        const [c, p, pass, comp, wrk, rem, st] = await Promise.all([
           supabase.from('clients').select('*, categories!clients_category_id_fkey(name), staff_profiles!clients_assigned_to_staff_fkey(full_name)').eq('id', id!).maybeSingle(),
           supabase.from('personal_details').select('*').eq('client_id', id!).maybeSingle(),
           supabase.from('passport_details').select('*').eq('client_id', id!).maybeSingle(),
           supabase.from('company_details').select('*').eq('client_id', id!).maybeSingle(),
           supabase.from('work_details').select('*').eq('client_id', id!).maybeSingle(),
-          supabase.from('remarks').select('*, staff_profiles(full_name)').eq('client_id', id!).order('created_at', { ascending: false }),
+          supabase.from('remarks').select('*').eq('client_id', id!).order('created_at', { ascending: false }),
+          supabase.from('staff_profiles').select('*'),
         ]);
 
         if (c.error) throw new Error(c.error.message);
@@ -34,6 +36,7 @@ export default function ClientPrint() {
         if (comp.error) throw new Error(comp.error.message);
         if (wrk.error) throw new Error(wrk.error.message);
         if (rem.error) throw new Error(rem.error.message);
+        if (st.error) throw new Error(st.error.message);
 
         setClient(c.data);
         setPd(p.data);
@@ -53,6 +56,7 @@ export default function ClientPrint() {
         }
         setWork(workData);
         setRemarks(rem.data ?? []);
+        setStaff(st.data ?? []);
       } catch (err: any) {
         console.error(err);
         setError(err.message || 'Failed to load client details.');
@@ -189,12 +193,15 @@ export default function ClientPrint() {
         <div className="mb-6">
           <h3 className="text-sm font-bold text-white bg-gray-800 px-3 py-1.5 mb-3 rounded">Remarks</h3>
           <div className="space-y-2">
-            {remarks.map(r => (
-              <div key={r.id} className="border border-gray-200 rounded p-3 text-sm">
-                <p className="text-gray-800">{r.content}</p>
-                <p className="text-xs text-gray-400 mt-1">{(r as any).staff_profiles?.full_name ?? 'Staff'} · {new Date(r.created_at).toLocaleString('en-IE')}</p>
-              </div>
-            ))}
+            {remarks.map(r => {
+              const authorName = staff.find((s: any) => s.id === r.author_id)?.full_name ?? 'Staff';
+              return (
+                <div key={r.id} className="border border-gray-200 rounded p-3 text-sm">
+                  <p className="text-gray-800">{r.content}</p>
+                  <p className="text-xs text-gray-400 mt-1">{authorName} · {new Date(r.created_at).toLocaleString('en-IE')}</p>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

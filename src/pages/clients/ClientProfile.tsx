@@ -94,7 +94,7 @@ export default function ClientProfile() {
         supabase.from('passport_details').select('*').eq('client_id', id!).maybeSingle(),
         supabase.from('company_details').select('*').eq('client_id', id!).maybeSingle(),
         supabase.from('work_details').select('*').eq('client_id', id!).maybeSingle(),
-        supabase.from('remarks').select('*, staff_profiles(full_name)').eq('client_id', id!).order('created_at', { ascending: false }),
+        supabase.from('remarks').select('*').eq('client_id', id!).order('created_at', { ascending: false }),
         supabase.from('documents').select('*').eq('client_id', id!).order('created_at', { ascending: false }),
         supabase.from('categories').select('*').order('name'),
         supabase.from('staff_profiles').select('*').order('full_name'),
@@ -609,7 +609,7 @@ export default function ClientProfile() {
                   <div className="flex-1">
                     <p className="text-sm text-slate-800">{r.content}</p>
                     <p className="text-xs text-slate-400 mt-1">
-                      {(r as any).staff_profiles?.full_name ?? 'Staff'} · {new Date(r.created_at).toLocaleString('en-IE')}
+                    {staff.find(s => s.id === r.author_id)?.full_name ?? 'Staff'} · {new Date(r.created_at).toLocaleString('en-IE')}
                     </p>
                   </div>
                   {r.author_id === user?.id && (
