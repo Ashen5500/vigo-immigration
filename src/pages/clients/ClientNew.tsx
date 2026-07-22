@@ -212,8 +212,10 @@ export default function ClientNew() {
         visa_number: form.visa_number || null,
         visa_expiry: form.visa_expiry || null,
         occupation: form.occupation || null,
-        port_of_entry: form.port_of_entry || null,
-        experiences: form.experiences || [],
+        port_of_entry: JSON.stringify({
+          port_of_entry: form.port_of_entry || '',
+          experiences: form.experiences || []
+        }),
       }),
     ]);
 

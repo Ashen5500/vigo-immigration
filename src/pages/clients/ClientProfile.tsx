@@ -11,6 +11,23 @@ import {
 
 type Tab = 'personal' | 'passport' | 'company' | 'work' | 'remarks' | 'documents';
 
+function parseWorkDetails(workData: any): any {
+  if (!workData) return null;
+  try {
+    const parsed = JSON.parse(workData.port_of_entry || '{}');
+    if (parsed && typeof parsed === 'object' && 'experiences' in parsed) {
+      return {
+        ...workData,
+        experiences: parsed.experiences || [],
+        port_of_entry: parsed.port_of_entry || '',
+      };
+    }
+  } catch (e) {
+    // fallback if it's not JSON
+  }
+  return workData;
+}
+
 export default function ClientProfile() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
@@ -86,7 +103,7 @@ export default function ClientProfile() {
       setPd(p.data);
       setPassport(pass.data);
       setCompany(comp.data);
-      setWork(wrk.data);
+      setWork(parseWorkDetails(wrk.data));
       setRemarks(rem.data ?? []);
       setDocuments(docs.data ?? []);
       setCategories(cats.data ?? []);
@@ -112,6 +129,17 @@ export default function ClientProfile() {
   async function saveEdit() {
     if (!id || !client) return;
     setSaving(true);
+
+    const { experiences, port_of_entry, ...otherWorkFields } = editWork;
+    const serializedPortOfEntry = JSON.stringify({
+      port_of_entry: port_of_entry || '',
+      experiences: experiences || []
+    });
+    const workPayload = {
+      ...otherWorkFields,
+      port_of_entry: serializedPortOfEntry
+    };
+
     const results = await Promise.all([
       supabase.from('clients').update({ ...editClient, updated_at: new Date().toISOString() }).eq('id', id),
       pd ? supabase.from('personal_details').update({ ...editPd, updated_at: new Date().toISOString() }).eq('client_id', id)
@@ -120,8 +148,8 @@ export default function ClientProfile() {
                : supabase.from('passport_details').insert({ client_id: id, ...editPassport }),
       company ? supabase.from('company_details').update({ ...editCompany, updated_at: new Date().toISOString() }).eq('client_id', id)
               : supabase.from('company_details').insert({ client_id: id, ...editCompany }),
-      work ? supabase.from('work_details').update({ ...editWork, updated_at: new Date().toISOString() }).eq('client_id', id)
-           : supabase.from('work_details').insert({ client_id: id, ...editWork }),
+      work ? supabase.from('work_details').update({ ...workPayload, updated_at: new Date().toISOString() }).eq('client_id', id)
+           : supabase.from('work_details').insert({ client_id: id, ...workPayload }),
     ]);
 
     const errResult = results.find(r => r.error);
@@ -143,7 +171,7 @@ export default function ClientProfile() {
     setPd(p.data);
     setPassport(pass.data);
     setCompany(comp.data);
-    setWork(wrk.data);
+    setWork(parseWorkDetails(wrk.data));
     setSaving(false);
     setEditing(false);
   }

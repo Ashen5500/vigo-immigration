@@ -39,7 +39,19 @@ export default function ClientPrint() {
         setPd(p.data);
         setPassport(pass.data);
         setCompany(comp.data);
-        setWork(wrk.data);
+        const workData = wrk.data;
+        if (workData) {
+          try {
+            const parsed = JSON.parse(workData.port_of_entry || '{}');
+            if (parsed && typeof parsed === 'object' && 'experiences' in parsed) {
+              workData.experiences = parsed.experiences || [];
+              workData.port_of_entry = parsed.port_of_entry || '';
+            }
+          } catch (e) {
+            // fallback
+          }
+        }
+        setWork(workData);
         setRemarks(rem.data ?? []);
       } catch (err: any) {
         console.error(err);
