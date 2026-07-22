@@ -13,25 +13,40 @@ export default function ClientPrint() {
   const [work, setWork] = useState<WorkDetails | null>(null);
   const [remarks, setRemarks] = useState<Remark[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
     async function load() {
-      const [c, p, pass, comp, wrk, rem] = await Promise.all([
-        supabase.from('clients').select('*, categories!clients_category_id_fkey(name), staff_profiles!clients_assigned_to_staff_fkey(full_name)').eq('id', id!).maybeSingle(),
-        supabase.from('personal_details').select('*').eq('client_id', id!).maybeSingle(),
-        supabase.from('passport_details').select('*').eq('client_id', id!).maybeSingle(),
-        supabase.from('company_details').select('*').eq('client_id', id!).maybeSingle(),
-        supabase.from('work_details').select('*').eq('client_id', id!).maybeSingle(),
-        supabase.from('remarks').select('*, staff_profiles(full_name)').eq('client_id', id!).order('created_at', { ascending: false }),
-      ]);
-      setClient(c.data);
-      setPd(p.data);
-      setPassport(pass.data);
-      setCompany(comp.data);
-      setWork(wrk.data);
-      setRemarks(rem.data ?? []);
-      setLoading(false);
+      try {
+        const [c, p, pass, comp, wrk, rem] = await Promise.all([
+          supabase.from('clients').select('*, categories!clients_category_id_fkey(name), staff_profiles!clients_assigned_to_staff_fkey(full_name)').eq('id', id!).maybeSingle(),
+          supabase.from('personal_details').select('*').eq('client_id', id!).maybeSingle(),
+          supabase.from('passport_details').select('*').eq('client_id', id!).maybeSingle(),
+          supabase.from('company_details').select('*').eq('client_id', id!).maybeSingle(),
+          supabase.from('work_details').select('*').eq('client_id', id!).maybeSingle(),
+          supabase.from('remarks').select('*, staff_profiles(full_name)').eq('client_id', id!).order('created_at', { ascending: false }),
+        ]);
+
+        if (c.error) throw new Error(c.error.message);
+        if (p.error) throw new Error(p.error.message);
+        if (pass.error) throw new Error(pass.error.message);
+        if (comp.error) throw new Error(comp.error.message);
+        if (wrk.error) throw new Error(wrk.error.message);
+        if (rem.error) throw new Error(rem.error.message);
+
+        setClient(c.data);
+        setPd(p.data);
+        setPassport(pass.data);
+        setCompany(comp.data);
+        setWork(wrk.data);
+        setRemarks(rem.data ?? []);
+      } catch (err: any) {
+        console.error(err);
+        setError(err.message || 'Failed to load client details.');
+      } finally {
+        setLoading(false);
+      }
     }
     load();
   }, [id]);
@@ -55,6 +70,7 @@ export default function ClientPrint() {
   }
 
   if (loading) return <div className="p-8 text-sm text-gray-500">Loading...</div>;
+  if (error) return <div className="p-8 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg max-w-lg mx-auto mt-8 font-medium">Error loading print view: {error}</div>;
   if (!client) return <div className="p-8 text-sm text-gray-500">Client not found.</div>;
 
   const name = pd ? `${pd.first_name} ${pd.last_name}` : '—';

@@ -112,7 +112,7 @@ export default function ClientProfile() {
   async function saveEdit() {
     if (!id || !client) return;
     setSaving(true);
-    await Promise.all([
+    const results = await Promise.all([
       supabase.from('clients').update({ ...editClient, updated_at: new Date().toISOString() }).eq('id', id),
       pd ? supabase.from('personal_details').update({ ...editPd, updated_at: new Date().toISOString() }).eq('client_id', id)
          : supabase.from('personal_details').insert({ client_id: id, ...editPd }),
@@ -123,6 +123,14 @@ export default function ClientProfile() {
       work ? supabase.from('work_details').update({ ...editWork, updated_at: new Date().toISOString() }).eq('client_id', id)
            : supabase.from('work_details').insert({ client_id: id, ...editWork }),
     ]);
+
+    const errResult = results.find(r => r.error);
+    if (errResult && errResult.error) {
+      alert(`Failed to save client details: ${errResult.error.message}`);
+      setSaving(false);
+      return;
+    }
+
     // Reload
     const [c, p, pass, comp, wrk] = await Promise.all([
       supabase.from('clients').select('*, categories!clients_category_id_fkey(name), staff_profiles!clients_assigned_to_staff_fkey(full_name)').eq('id', id).maybeSingle(),

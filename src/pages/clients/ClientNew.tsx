@@ -174,7 +174,7 @@ export default function ClientNew() {
     }
 
     const cid = client.id;
-    await Promise.all([
+    const results = await Promise.all([
       supabase.from('personal_details').insert({
         client_id: cid,
         first_name: form.first_name, last_name: form.last_name,
@@ -216,6 +216,13 @@ export default function ClientNew() {
         experiences: form.experiences || [],
       }),
     ]);
+
+    const errResult = results.find(r => r.error);
+    if (errResult && errResult.error) {
+      setError(`Failed to create client details: ${errResult.error.message}`);
+      setSaving(false);
+      return;
+    }
 
     navigate(`/clients/${cid}`);
   }
