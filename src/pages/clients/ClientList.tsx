@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { Client, Category, StaffProfile } from '../../lib/types';
 import { STATUS_COLORS, CLIENT_STATUSES, formatDate } from '../../lib/utils';
-import { Plus, Search, Filter, X, Mail, Download } from 'lucide-react';
+import { Plus, Search, Filter, X, Mail, Download, Trash2, AlertTriangle } from 'lucide-react';
 
 export default function ClientList() {
   const [clients, setClients] = useState<Client[]>([]);
@@ -15,6 +15,8 @@ export default function ClientList() {
   const [categoryFilter, setCategoryFilter] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [searchParams] = useSearchParams();
+  const [deleting, setDeleting] = useState(false);
+  const [confirmModal, setConfirmModal] = useState<{ open: boolean; ids: string[]; names: string[] }>({ open: false, ids: [], names: [] });
 
   useEffect(() => {
     supabase.from('categories').select('*').order('name').then(r => setCategories(r.data ?? []));
@@ -76,6 +78,40 @@ export default function ClientList() {
 
   const hasFilters = search || statusFilter || categoryFilter;
 
+  function requestDeleteSingle(client: Client) {
+    const pd = client.personal_details as any;
+    const name = pd ? `${pd.first_name} ${pd.last_name}` : client.reg_no;
+    setConfirmModal({ open: true, ids: [client.id], names: [name] });
+  }
+
+  function requestDeleteSelected() {
+    const ids = Array.from(selected);
+    const names = ids.map(id => {
+      const c = clients.find(cl => cl.id === id);
+      if (!c) return id;
+      const pd = c.personal_details as any;
+      return pd ? `${pd.first_name} ${pd.last_name}` : c.reg_no;
+    });
+    setConfirmModal({ open: true, ids, names });
+  }
+
+  async function handleConfirmDelete() {
+    const ids = confirmModal.ids;
+    if (ids.length === 0) return;
+    setDeleting(true);
+    const { error } = await supabase.from('clients').delete().in('id', ids);
+    if (!error) {
+      setSelected(prev => {
+        const next = new Set(prev);
+        ids.forEach(id => next.delete(id));
+        return next;
+      });
+      await loadClients();
+    }
+    setDeleting(false);
+    setConfirmModal({ open: false, ids: [], names: [] });
+  }
+
   return (
     <div className="p-6 max-w-7xl mx-auto">
       {/* Header */}
@@ -125,12 +161,20 @@ export default function ClientList() {
           </button>
         )}
         {selected.size > 0 && (
-          <Link
-            to={`/email?clients=${Array.from(selected).join(',')}`}
-            className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium px-3 py-2 rounded-lg transition-colors ml-auto"
-          >
-            <Mail className="w-4 h-4" /> Email {selected.size} selected
-          </Link>
+          <div className="flex items-center gap-2 ml-auto">
+            <button
+              onClick={requestDeleteSelected}
+              className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium px-3 py-2 rounded-lg transition-colors"
+            >
+              <Trash2 className="w-4 h-4" /> Delete {selected.size} selected
+            </button>
+            <Link
+              to={`/email?clients=${Array.from(selected).join(',')}`}
+              className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium px-3 py-2 rounded-lg transition-colors"
+            >
+              <Mail className="w-4 h-4" /> Email {selected.size} selected
+            </Link>
+          </div>
         )}
       </div>
 
@@ -198,9 +242,18 @@ export default function ClientList() {
                       <td className="px-4 py-3.5 text-slate-600">{sp?.full_name ?? '—'}</td>
                       <td className="px-4 py-3.5 text-slate-500">{formatDate(client.case_date)}</td>
                       <td className="px-4 py-3.5">
-                        <Link to={`/clients/${client.id}`} className="text-blue-600 hover:text-blue-700 text-xs font-medium">
-                          View
-                        </Link>
+                        <div className="flex items-center gap-2">
+                          <Link to={`/clients/${client.id}`} className="text-blue-600 hover:text-blue-700 text-xs font-medium">
+                            View
+                          </Link>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); requestDeleteSingle(client); }}
+                            className="text-slate-400 hover:text-red-600 transition-colors p-1 rounded hover:bg-red-50"
+                            title="Delete client"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -210,6 +263,63 @@ export default function ClientList() {
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {confirmModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => !deleting && setConfirmModal({ open: false, ids: [], names: [] })} />
+          <div className="relative bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md mx-4 p-6 animate-in">
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0 w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                <AlertTriangle className="w-5 h-5 text-red-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-lg font-semibold text-slate-900">
+                  Delete {confirmModal.ids.length === 1 ? 'Client' : `${confirmModal.ids.length} Clients`}
+                </h3>
+                <p className="text-sm text-slate-500 mt-1">
+                  This will permanently delete {confirmModal.ids.length === 1 ? 'this client' : 'these clients'} and all associated records (personal details, passport, documents, invoices, remarks, etc.). This action cannot be undone.
+                </p>
+                {confirmModal.names.length <= 5 && (
+                  <div className="mt-3 space-y-1">
+                    {confirmModal.names.map((name, i) => (
+                      <div key={i} className="text-sm font-medium text-slate-700 bg-slate-50 px-3 py-1.5 rounded-lg">
+                        {name}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {confirmModal.names.length > 5 && (
+                  <p className="mt-2 text-xs text-slate-400">
+                    {confirmModal.names.slice(0, 3).join(', ')} and {confirmModal.names.length - 3} more...
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-3 mt-6">
+              <button
+                onClick={() => setConfirmModal({ open: false, ids: [], names: [] })}
+                disabled={deleting}
+                className="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                disabled={deleting}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:bg-red-400"
+              >
+                {deleting ? (
+                  <span className="inline-block w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <Trash2 className="w-4 h-4" />
+                )}
+                {deleting ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
