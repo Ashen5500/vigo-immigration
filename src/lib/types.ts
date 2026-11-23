@@ -1,9 +1,12 @@
-export type UserRole = 'admin' | 'consultant';
+export type UserRole = 'super_admin' | 'admin' | 'consultant';
+export type StaffStatus = 'pending' | 'approved' | 'rejected';
 
 export interface StaffProfile {
   id: string;
   full_name: string;
+  email?: string;
   role: UserRole;
+  status?: StaffStatus;
   avatar_url?: string;
   created_at: string;
 }

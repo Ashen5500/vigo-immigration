@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabase';
 import {
   Building2, LayoutDashboard, Users, FileText, Mail,
   Settings, Database, Menu, X, LogOut, ChevronRight,
@@ -21,6 +22,21 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
+
+  const isAdminOrSuper = profile?.role === 'super_admin' || profile?.role === 'admin';
+
+  useEffect(() => {
+    if (isAdminOrSuper) {
+      supabase
+        .from('staff_profiles')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'pending')
+        .then(({ count }) => {
+          if (count !== null) setPendingCount(count);
+        });
+    }
+  }, [isAdminOrSuper, location.pathname]);
 
   async function handleSignOut() {
     await signOut();
@@ -66,7 +82,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 }`}
               >
                 <Icon className="w-4.5 h-4.5 flex-shrink-0" size={18} />
-                {label}
+                <span className="flex-1">{label}</span>
+                {path === '/settings' && pendingCount > 0 && (
+                  <span className="bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                    {pendingCount}
+                  </span>
+                )}
                 {active && <ChevronRight className="ml-auto w-4 h-4 opacity-60" />}
               </Link>
             );
@@ -76,12 +97,24 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         {/* User */}
         <div className="p-3 border-t border-slate-700/60">
           <div className="flex items-center gap-3 px-2 py-2 rounded-lg">
-            <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
-              <User className="w-4 h-4 text-white" />
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 font-bold text-xs ${
+              profile?.role === 'super_admin' ? 'bg-purple-600 text-white' : 'bg-blue-500 text-white'
+            }`}>
+              {profile?.full_name ? profile.full_name.charAt(0).toUpperCase() : <User className="w-4 h-4 text-white" />}
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-white text-sm font-medium truncate">{profile?.full_name ?? user?.email}</p>
-              <p className="text-slate-400 text-xs capitalize">{profile?.role ?? 'Staff'}</p>
+              {profile?.role === 'super_admin' ? (
+                <span className="inline-block text-[10px] font-semibold bg-purple-500/20 text-purple-300 border border-purple-500/30 px-1.5 py-0.5 rounded">
+                  Super Admin
+                </span>
+              ) : profile?.role === 'admin' ? (
+                <span className="inline-block text-[10px] font-semibold bg-blue-500/20 text-blue-300 border border-blue-500/30 px-1.5 py-0.5 rounded">
+                  Admin
+                </span>
+              ) : (
+                <p className="text-slate-400 text-xs capitalize">{profile?.role ?? 'Consultant'}</p>
+              )}
             </div>
             <button onClick={handleSignOut} title="Sign out" className="text-slate-400 hover:text-red-400 transition-colors">
               <LogOut className="w-4 h-4" />
@@ -100,9 +133,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <div className="flex-1" />
           <button className="relative text-slate-500 hover:text-slate-700 transition-colors">
             <Bell className="w-5 h-5" />
+            {pendingCount > 0 && (
+              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-amber-500 rounded-full" />
+            )}
           </button>
-          <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-            <User className="w-4 h-4 text-blue-600" />
+          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${
+            profile?.role === 'super_admin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-600'
+          }`}>
+            {profile?.full_name ? profile.full_name.charAt(0).toUpperCase() : <User className="w-4 h-4" />}
           </div>
         </header>
 

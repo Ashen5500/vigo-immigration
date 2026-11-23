@@ -13,15 +13,32 @@ import InvoiceDetail from './pages/invoices/InvoiceDetail';
 import EmailCompose from './pages/email/EmailCompose';
 import BackupPage from './pages/backup/BackupPage';
 import SettingsPage from './pages/settings/SettingsPage';
+import PendingApproval from './pages/PendingApproval';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { session, loading } = useAuth();
+  const { session, profile, user, loading } = useAuth();
+
   if (loading) return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-      <span className="inline-block w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
+      <div className="text-center">
+        <span className="inline-block w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-2" />
+        <p className="text-slate-400 text-xs">Loading application...</p>
+      </div>
     </div>
   );
+
   if (!session) return <Navigate to="/login" replace />;
+
+  // Super Admin / Ashen is guaranteed immediate access; other participants require approval
+  const isAshen = Boolean(user?.email && user.email.toLowerCase().includes('ashen'));
+  const isApproved = Boolean(
+    isAshen || (profile && (profile.status === 'approved' || profile.role === 'super_admin'))
+  );
+
+  if (!isApproved) {
+    return <PendingApproval />;
+  }
+
   return <>{children}</>;
 }
 
@@ -30,12 +47,17 @@ function AppRoutes() {
 
   if (loading) return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-      <span className="inline-block w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
+      <div className="text-center">
+        <span className="inline-block w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-2" />
+        <p className="text-slate-400 text-xs">Loading application...</p>
+      </div>
     </div>
   );
 
   return (
     <Routes>
+      {/* Root redirect: immediately routes unauthenticated users to /login */}
+      <Route path="/" element={session ? <Navigate to="/dashboard" replace /> : <Navigate to="/login" replace />} />
       <Route path="/login" element={session ? <Navigate to="/dashboard" replace /> : <Login />} />
 
       {/* Print view — no sidebar */}

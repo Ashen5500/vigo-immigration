@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Building2, Lock, Mail, Eye, EyeOff, UserPlus, LogIn } from 'lucide-react';
+import { isSupabaseConfigured } from '../lib/supabase';
+import { Building2, Lock, Mail, Eye, EyeOff, UserPlus, LogIn, AlertTriangle, ExternalLink } from 'lucide-react';
 
 export default function Login() {
   const { signIn, signUp } = useAuth();
@@ -10,20 +11,47 @@ export default function Login() {
   const [fullName, setFullName] = useState('');
   const [showPass, setShowPass] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [isFetchError, setIsFetchError] = useState(false);
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
+    setSuccess('');
+    setIsFetchError(false);
     setLoading(true);
+
+    if (!isSupabaseConfigured) {
+      setError('Supabase credentials are not configured. Please add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your .env file.');
+      setLoading(false);
+      return;
+    }
+
     let result: { error: string | null };
     if (mode === 'login') {
       result = await signIn(email, password);
+      if (!result.error) {
+        window.location.href = '/dashboard';
+        return;
+      }
     } else {
       if (!fullName.trim()) { setError('Full name is required'); setLoading(false); return; }
       result = await signUp(email, password, fullName);
+      if (!result.error) {
+        setSuccess('Account created successfully! If email verification is enabled on your Supabase project, check your email to confirm before signing in.');
+        setMode('login');
+      }
     }
-    if (result.error) setError(result.error);
+
+    if (result.error) {
+      if (result.error.toLowerCase().includes('failed to fetch')) {
+        setIsFetchError(true);
+        setError('Failed to fetch: Unable to reach the Supabase backend.');
+      } else {
+        setError(result.error);
+      }
+    }
     setLoading(false);
   }
 
@@ -44,6 +72,46 @@ export default function Login() {
           <h2 className="text-xl font-semibold text-slate-800 mb-6">
             {mode === 'login' ? 'Sign in to your account' : 'Create a new account'}
           </h2>
+
+          {!isSupabaseConfigured && (
+            <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg p-3.5 mb-4 flex items-start gap-2.5">
+              <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold">Configuration Missing</p>
+                <p className="text-xs text-amber-700 mt-0.5">
+                  Supabase credentials are not found in your <code>.env</code> file. Please configure <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code>.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {success && (
+            <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm rounded-lg p-3.5 mb-4">
+              {success}
+            </div>
+          )}
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3.5 mb-4 space-y-2">
+              <div className="font-medium">{error}</div>
+              {isFetchError && (
+                <div className="text-xs text-red-600 leading-relaxed border-t border-red-200 pt-2 space-y-1">
+                  <p className="font-semibold text-red-700">Why this happens:</p>
+                  <p>• <strong>Paused Project:</strong> Supabase free projects automatically pause after 7 days of inactivity. Go to your Supabase dashboard and click <strong>&quot;Restore project&quot;</strong>.</p>
+                  <p>• <strong>Network Block:</strong> An ad blocker, firewall, or VPN may be blocking connections to <code>supabase.co</code>.</p>
+                  <p>• <strong>Invalid Credentials:</strong> Verify the <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code> in your <code>.env</code> file.</p>
+                  <a
+                    href="https://supabase.com/dashboard"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-blue-600 hover:underline font-semibold mt-1"
+                  >
+                    Open Supabase Dashboard <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              )}
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {mode === 'signup' && (
@@ -101,12 +169,6 @@ export default function Login() {
               </div>
             </div>
 
-            {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
-                {error}
-              </div>
-            )}
-
             <button
               type="submit"
               disabled={loading}
@@ -125,13 +187,13 @@ export default function Login() {
           <div className="mt-6 text-center text-sm text-slate-500">
             {mode === 'login' ? (
               <>No account yet?{' '}
-                <button onClick={() => { setMode('signup'); setError(''); }} className="text-blue-600 hover:underline font-medium">
+                <button onClick={() => { setMode('signup'); setError(''); setSuccess(''); setIsFetchError(false); }} className="text-blue-600 hover:underline font-medium">
                   Create one
                 </button>
               </>
             ) : (
               <>Already have an account?{' '}
-                <button onClick={() => { setMode('login'); setError(''); }} className="text-blue-600 hover:underline font-medium">
+                <button onClick={() => { setMode('login'); setError(''); setSuccess(''); setIsFetchError(false); }} className="text-blue-600 hover:underline font-medium">
                   Sign in
                 </button>
               </>
@@ -142,3 +204,4 @@ export default function Login() {
     </div>
   );
 }
+
